@@ -1,5 +1,10 @@
-.App {
+.container {
     width: 400px;
+    margin: 0 auto;
+}
+
+.container h1, h2 {
+    text-align: center;
 }
 
 .done {

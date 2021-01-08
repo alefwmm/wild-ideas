@@ -1,72 +1,141 @@
 import { useContext, createContext } from "react";
-import { types, flow } from 'mobx-state-tree';
+import { types, flow, getParentOfType } from 'mobx-state-tree';
 import { computedFn, fromPromise } from 'mobx-utils';
-import { computed, runInAction } from 'mobx';
+
+const exampleTodos = (userId) => {
+    const todos = [
+        {
+            name: 'Dentist',
+            description: 'Make an appointment',
+            done: true,
+            createdAt: new Date().toISOString()
+        },
+        {
+            name: 'Lunch',
+            description: 'Make lunch',
+            createdAt: new Date().toISOString()
+        },
+        {
+            name: 'Birthday',
+            description: 'Buy a present',
+            createdAt: new Date().toISOString()
+        },
+    ];
+
+    return todos.map((todo, i) => ({
+        ...todo,
+        id: `${userId}-${i+1}`,
+        userId: userId
+    }));
+};
+
+const exampleUser = userId => ({
+    id: userId,
+    name: `User ${userId}`,
+    email: `user${userId}@.example.com`
+});
 
 const wait = (ms, value) =>
     new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
 const Todo = types.model('Todo', {
-    id: types.identifierNumber,
+    id: types.identifier,
     name: types.string,
     description: types.optional(types.string, ''),
-    done: types.optional(types.boolean, false)
+    done: types.optional(types.boolean, false),
+    createdAt: types.string
 }).actions(self => {
     return {
         toggle() {
             self.done = !self.done
         }
     };
-})
+});
 
-const exampleTodos = [
-    {
-        id: 1,
-        name: 'Dentist',
-        description: 'Make an appointment',
-        done: true
-    },
-    {
-        id: 2,
-        name: 'Lunch',
-        description: 'Make lunch'
-    },
-    {
-        id: 3,
-        name: 'Birthday',
-        description: 'Buy a present'
-    },
-];
+const User = types.model('User', {
+    id: types.identifier,
+    name: types.string,
+    email: types.string
+}).views(self => ({
+    get avTodos() {
+        return getParentOfType(self, Store).avTodosByUserId(self.id);
+    }
+}));
+
+const asyncView = (fn) => (...args) => {
+    const value = fn(...args);
+    if (value instanceof Promise) return fromPromise(value);
+    return fromPromise.resolve(value);
+};
+
+const makeAsyncViews = (views) => (
+    Object.keys(views).map((key) => {
+        const descriptor = Object.getOwnPropertyDescriptor(views, key);
+
+        if ("get" in descriptor)
+            descriptor.get = asyncView(descriptor.get);
+        else
+            descriptor.value = computedFn(asyncView(descriptor.value));
+
+        return [key, descriptor];
+    }).reduce((acc, [key, descriptor]) => {
+        Object.defineProperty(acc, key, descriptor);
+        return acc;
+    }, {})
+);
 
 const Store = types.model('Store', {
-    todoMap: types.map(Todo),
-    todoList: types.array(types.safeReference(Todo))
-}).actions(self => {
+    todos: types.map(Todo),
+    users: types.map(User),
+    todosByUserId: types.map(types.array(types.safeReference(Todo)))
+}).actions(self => ({
+    loadTodosByUserId: flow(function* (userId) {
+
+        const oldTodos = self.todosByUserId.get(userId);
+        if (oldTodos) {
+            oldTodos.forEach(todo => self.todos.delete(todo.id));
+            self.todosByUserId.delete(userId);
+        }
+
+        let todos = yield wait(1000, exampleTodos(userId));
+
+        self.todosByUserId.set(userId, todos.map(todo => self.todos.put(todo)));
+        return self.todosByUserId.get(userId);
+    }),
+
+    setUser(userSnapshot) {
+        return self.users.put(userSnapshot);
+    },
+
+    loadUserById(userId) {
+        return Promise.resolve().then(() => {
+            const oldUser = self.users.get(userId);
+            if (oldUser) self.users.delete(userId);
+            return wait(2000, exampleUser(userId));
+        }).then(self.setUser);
+    }
+})).views(self => {
     return {
-        loadTodos: flow(function* () {
-            if (self.todoList.length !== 0) return;
-            const todos = yield wait(2000, exampleTodos);
-            self.todoList = todos.map(todo => self.todoMap.put(todo));
+        ...makeAsyncViews({
+            avUserById(userId) {
+                if (self.users.has(userId)) return self.users.get(userId);
+                return self.loadUserById(userId);
+            },
+
+            avTodosByUserId(userId) {
+                if (self.todosByUserId.has(userId))
+                    return self.todosByUserId.get(userId);
+                return self.loadTodosByUserId(userId);
+            },
         }),
-        loadTodosSync() {
-            self.todoList = exampleTodos.map(todo => self.todoMap.put(todo));
+
+        get userList() {
+            return [...self.users.values()];
         },
-        getById: flow(function* (id) {
-            yield self.loadTodos();
-            return yield wait(5000, self.todoMap.get(id));
-        })
-    };
-}).views(self => {
-    return {
-        get todos() {
-            return fromPromise(self.loadTodos().then(() => self.todoList));
-        },
-        byId: computedFn((id) => {
-            return fromPromise(self.todos.then(() => self.getById(id)))
-        }),
-        byIdName: computedFn((id) => {
-            return fromPromise(self.byId(id).then(todo => todo ? todo.name : 'Não existe'))
-        })
+
+        get todoList() {
+            return [...self.todos.values()];
+        }
     }
 });
 

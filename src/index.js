@@ -4,13 +4,33 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { Provider, Store } from './wild';
-import { autorun } from 'mobx';
+import { onSnapshot, onAction, onPatch } from 'mobx-state-tree';
 
-const store = Store.create();
+const store = Store.create(
+    {
+        "users": {
+            "1": {
+                "id": "1",
+                "name": "User 1",
+                "email": "user1@.example.com"
+            },
+            "2": {
+                "id": "2",
+                "name": "User 2",
+                "email": "user2@.example.com"
+            }
+        }
+    }
+);
 
-autorun(() => {
-    console.log(JSON.stringify(store, null, 4));
-})
+onSnapshot(store, snapshot => {
+    console.log(JSON.stringify(snapshot, null, 4));
+});
+
+setTimeout(() => {
+    store.loadTodosByUserId('2');
+}, 5000);
+
 
 ReactDOM.render(
     <React.StrictMode>
