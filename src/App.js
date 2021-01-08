@@ -88,6 +88,13 @@ const UserItem = observer(({ user }) => (
     <div>
         <h3>{user.name}</h3>
         <p>{user.email}</p>
+        <h4>
+            Todos amount:
+            { user.avTodosAmount.case({
+                fulfilled: amount => amount,
+                pending: () => 'Loading'
+            }) }
+        </h4>
         <UserTodos user={user} />
     </div>
 ));

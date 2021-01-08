@@ -59,6 +59,10 @@ const User = types.model('User', {
 }).views(self => ({
     get avTodos() {
         return getParentOfType(self, Store).avTodosByUserId(self.id);
+    },
+
+    get avTodosAmount() {
+        return getParentOfType(self, Store).avTodosAmountByUserId(self.id)
     }
 }));
 
@@ -84,35 +88,43 @@ const makeAsyncViews = (views) => (
     }, {})
 );
 
+const asyncAction = (fn) => (...args) => fromPromise(fn(...args));
+
+const makeAsyncActions = (actions) => (
+    Object.entries(actions).reduce(
+        (acc, [key, func]) => ({...acc, [key]: asyncAction(func)}),
+        {}
+    )
+);
+
 const Store = types.model('Store', {
     todos: types.map(Todo),
     users: types.map(User),
     todosByUserId: types.map(types.array(types.safeReference(Todo)))
 }).actions(self => ({
-    loadTodosByUserId: flow(function* (userId) {
+    ...makeAsyncActions({
+        loadUserById(userId) {
+            const oldUser = self.users.get(userId);
+            if (oldUser) self.users.delete(userId);
+            return wait(2000, exampleUser(userId)).then(self.setUser);
+        },
 
-        const oldTodos = self.todosByUserId.get(userId);
-        if (oldTodos) {
-            oldTodos.forEach(todo => self.todos.delete(todo.id));
-            self.todosByUserId.delete(userId);
-        }
+        loadTodosByUserId: flow(function* (userId) {
+            const oldTodos = self.todosByUserId.get(userId);
+            if (oldTodos) {
+                oldTodos.forEach(todo => self.todos.delete(todo.id));
+                self.todosByUserId.delete(userId);
+            }
 
-        let todos = yield wait(1000, exampleTodos(userId));
+            let todos = yield wait(1000, exampleTodos(userId));
 
-        self.todosByUserId.set(userId, todos.map(todo => self.todos.put(todo)));
-        return self.todosByUserId.get(userId);
+            self.todosByUserId.set(userId, todos.map(todo => self.todos.put(todo)));
+            return self.todosByUserId.get(userId);
+        }),
     }),
 
     setUser(userSnapshot) {
         return self.users.put(userSnapshot);
-    },
-
-    loadUserById(userId) {
-        return Promise.resolve().then(() => {
-            const oldUser = self.users.get(userId);
-            if (oldUser) self.users.delete(userId);
-            return wait(2000, exampleUser(userId));
-        }).then(self.setUser);
     }
 })).views(self => {
     return {
@@ -127,6 +139,10 @@ const Store = types.model('Store', {
                     return self.todosByUserId.get(userId);
                 return self.loadTodosByUserId(userId);
             },
+
+            avTodosAmountByUserId(userId) {
+                return self.avTodosByUserId(userId).then(todos => todos.length);
+            }
         }),
 
         get userList() {

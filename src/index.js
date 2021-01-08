@@ -5,6 +5,7 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { Provider, Store } from './wild';
 import { onSnapshot, onAction, onPatch } from 'mobx-state-tree';
+import { autorun, observable } from 'mobx';
 
 const store = Store.create(
     {
@@ -23,13 +24,17 @@ const store = Store.create(
     }
 );
 
-onSnapshot(store, snapshot => {
-    console.log(JSON.stringify(snapshot, null, 4));
-});
+let action = observable.box();
 
 setTimeout(() => {
-    store.loadTodosByUserId('2');
+    action.set(store.loadTodosByUserId('2'));
 }, 5000);
+
+autorun(() => {
+    console.log(action.get());
+    const promise = action.get();
+    if (promise) console.log(promise.state);
+});
 
 
 ReactDOM.render(
