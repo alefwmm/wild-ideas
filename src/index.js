@@ -1,41 +1,28 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import { onSnapshot } from 'mobx-state-tree';
+
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
-import { Provider, Store } from './wild';
-import { onSnapshot, onAction, onPatch } from 'mobx-state-tree';
-import { autorun, observable } from 'mobx';
+import { Provider, Store } from './models';
 
-const store = Store.create(
-    {
-        "users": {
-            "1": {
-                "id": "1",
-                "name": "User 1",
-                "email": "user1@.example.com"
-            },
-            "2": {
-                "id": "2",
-                "name": "User 2",
-                "email": "user2@.example.com"
-            }
+const store = Store.create({
+    "users": {
+        "1": {
+            "id": "1",
+            "name": "Gabriel"
+        },
+        "2": {
+            "id": "2",
+            "name": "Carlo"
         }
     }
-);
-
-let action = observable.box();
-
-setTimeout(() => {
-    action.set(store.loadTodosByUserId('2'));
-}, 5000);
-
-autorun(() => {
-    console.log(action.get());
-    const promise = action.get();
-    if (promise) console.log(promise.state);
 });
 
+onSnapshot(store, (snapshot) => {
+    console.log(JSON.stringify(snapshot, null, 4));
+});
 
 ReactDOM.render(
     <React.StrictMode>

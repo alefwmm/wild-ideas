@@ -116,7 +116,7 @@ const Store = types.model('Store', {
                 self.todosByUserId.delete(userId);
             }
 
-            let todos = yield wait(1000, exampleTodos(userId));
+            let todos = yield wait(5000, exampleTodos(userId));
 
             self.todosByUserId.set(userId, todos.map(todo => self.todos.put(todo)));
             return self.todosByUserId.get(userId);
